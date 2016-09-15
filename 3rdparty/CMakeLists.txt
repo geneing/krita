@@ -119,3 +119,5 @@ add_subdirectory( ext_frameworks )
 if (MSVC)
     add_subdirectory( google-breakpad )
 endif()
+add_subdirectory(ext_pythonqt)
+

@@ -723,22 +723,22 @@ public:
      * Create a new image that has this document as a parent and
      * replace the current image with this image.
      */
-    bool newImage(const QString& name, qint32 width, qint32 height, const KoColorSpace * cs, const KoColor &bgColor, const QString &imageDescription, const double imageResolution);
+    Q_INVOKABLE bool newImage(const QString& name, qint32 width, qint32 height, const KoColorSpace * cs, const KoColor &bgColor, const QString &imageDescription, const double imageResolution);
 
     /**
      * Create a new image that has this document as a parent and
      * replace the current image with this image.
      */
-    bool newImage(const QString& name, qint32 width, qint32 height, const KoColorSpace * cs, const KoColor &bgColor, bool backgroundAsLayer,
+    Q_INVOKABLE bool newImage(const QString& name, qint32 width, qint32 height, const KoColorSpace * cs, const KoColor &bgColor, bool backgroundAsLayer,
                   int numberOfLayers, const QString &imageDescription, const double imageResolution);
 
     /**
      * Create a new image that has this document as a parent and
      * replace the current image with this image.
      */
-    KisImageWSP newImage(const QString& name, qint32 width, qint32 height, const KoColorSpace * colorspace);
+    Q_INVOKABLE KisImageWSP newImage(const QString& name, qint32 width, qint32 height, const KoColorSpace * colorspace);
 
-    KisImageWSP image() const;
+    Q_INVOKABLE KisImageWSP image() const;
 
     /**
      * Makes an otherwise empty document ready for import/export
@@ -768,7 +768,7 @@ public:
     /**
      * Set the current image to the specified image and turn undo on.
      */
-    void setCurrentImage(KisImageSP image);
+    Q_INVOKABLE void setCurrentImage(KisImageSP image);
 
     KisUndoStore* createUndoStore();
 

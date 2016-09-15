@@ -266,9 +266,15 @@ set(kis_derived_resources_test_SRCS kis_derived_resources_test.cpp)
 kde4_add_unit_test(KisDerivedResourcesTest TESTNAME krita-ui-DerivedResourcesTest ${kis_derived_resources_test_SRCS})
 target_link_libraries(KisDerivedResourcesTest kritaui Qt5::Test)
 
-########### next target ###############
+########### next target ###############${PYTHON_INCLUDE_DIR
 
 set(kis_brush_hud_properties_config_test_SRCS kis_brush_hud_properties_config_test.cpp)
 kde4_add_unit_test(KisBrushHudPropertiesConfigTest TESTNAME krita-ui-BrushHudPropertiesConfigTest ${kis_brush_hud_properties_config_test_SRCS})
 target_link_libraries(KisBrushHudPropertiesConfigTest kritaui Qt5::Test)
 
+########### next target ###############
+
+set(kis_python_scripting_test_SRCS kis_python_scripting_test.cpp)
+kde4_add_broken_unit_test(KisPythonScriptingTest TESTNAME krita-ui-PythonScriptingTest ${kis_python_scripting_test_SRCS})
+target_link_libraries(KisPythonScriptingTest kritaui Qt5::Test ${CMAKE_SOURCE_DIR}/3rdparty/ext_pythonqt/lib/libPythonQt.so ${CMAKE_SOURCE_DIR}/3rdparty/ext_pythonqt/lib/libPythonQt_QtAll.so Qt5::Widgets Qt5::Gui Qt5::Core GL)
+target_include_directories(KisPythonScriptingTest PRIVATE ${PYTHON_INCLUDE_DIR} ${CMAKE_SOURCE_DIR}/3rdparty/ext_pythonqt/src ${CMAKE_SOURCE_DIR}/3rdparty/ext_pythonqt/extensions/PythonQt_QtAll )
