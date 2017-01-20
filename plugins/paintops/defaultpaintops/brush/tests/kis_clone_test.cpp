@@ -1119,7 +1119,6 @@ void TestClone::test(void)
     KisResourcesSnapshotSP resources =
         new KisResourcesSnapshot(image,
                                  layer,
-                                 image->postExecutionUndoAdapter(),
                                  manager.data());
     resources->setupPainter(&painter);
 
@@ -1136,7 +1135,7 @@ void TestClone::test(void)
     painter.device()->setDirty(painter.takeDirtyRegion());
 
     image->refreshGraph();
-    doc->saveNativeFormat("/home/eugening/Projects/test.kra");
+    doc->saveAs(QUrl(QString("/home/eugening/Projects/test.kra")));
 
     delete doc;
 }

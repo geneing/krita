@@ -28,6 +28,7 @@ public:
     KisRandomConstAccessorNG() {}
     virtual ~KisRandomConstAccessorNG();
     virtual void moveTo(qint32 x, qint32 y) = 0;
+
     virtual qint32 numContiguousColumns(qint32 x) const = 0;
     virtual qint32 numContiguousRows(qint32 y) const = 0;
     virtual qint32 rowStride(qint32 x, qint32 y) const = 0;
@@ -39,6 +40,7 @@ class KRITAIMAGE_EXPORT KisRandomAccessorNG : public KisRandomConstAccessorNG, p
 public:
     KisRandomAccessorNG() {}
     virtual ~KisRandomAccessorNG();
+    virtual quint8 * rawDataImm(qint32 x, qint32 y) = 0;
 };
 
 #endif

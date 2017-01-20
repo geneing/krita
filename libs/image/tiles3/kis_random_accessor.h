@@ -24,17 +24,18 @@
 
 #include "kis_tiled_data_manager.h"
 #include "kis_random_accessor_ng.h"
-
+#include <Vc/Vc>
 
 class KisRandomAccessor2 : public KisRandomAccessorNG
 {
 
     struct KisTileInfo {
+        //qint32 area_x1, area_y1, -area_x2, -area_y2;
+        Vc::int32_v area;
         KisTileSP tile;
         KisTileSP oldtile;
         quint8* data;
         const quint8* oldData;
-        qint32 area_x1, area_y1, area_x2, area_y2;
     };
 
 public:
@@ -45,19 +46,19 @@ public:
 
 
 private:
-    inline void lockTile(KisTileSP &tile) {
+    inline void lockTile(KisTile* tile) {
         if (m_writable)
             tile->lockForWrite();
         else
             tile->lockForRead();
     }
 
-    inline void lockOldTile(KisTileSP &tile) {
+    inline void lockOldTile(KisTile* tile) {
         // Doesn't depend on access type
         tile->lockForRead();
     }
 
-    inline void unlockTile(KisTileSP &tile) {
+    inline void unlockTile(KisTile* tile) {
         tile->unlock();
     }
 
@@ -68,14 +69,29 @@ private:
         return m_ktm ? m_ktm->yToRow(y) : 0;
     }
 
-    KisTileInfo* fetchTileData(qint32 col, qint32 row);
+    void fetchTileData(qint32 col, qint32 row, KisTileInfo& kti);
 
 public:
     /// Move to a given x,y position, fetch tiles and data
     void moveTo(qint32 x, qint32 y);
-    quint8* rawData();
+
+    inline quint8* rawData()
+    {
+        return m_tilesCache.front().data + offset;
+    }
+
+    inline quint8* rawDataImm(qint32 x, qint32 y)
+    {
+        moveTo( x, y );
+        return m_tilesCache.front().data + offset;
+    }
     const quint8* oldRawData() const;
-    const quint8* rawDataConst() const;
+
+    inline const quint8* rawDataConst() const
+    {
+        return m_tilesCache.front().data + offset;
+    }
+
     qint32 numContiguousColumns(qint32 x) const;
     qint32 numContiguousRows(qint32 y) const;
     qint32 rowStride(qint32 x, qint32 y) const;
@@ -84,16 +100,18 @@ public:
 
 private:
     KisTiledDataManager *m_ktm;
-    KisTileInfo** m_tilesCache;
+    std::list<KisTileInfo> m_tilesCache;
     quint32 m_tilesCacheSize;
     qint32 m_pixelSize;
-    quint8* m_data;
+
     const quint8* m_oldData;
     bool m_writable;
     int m_lastX, m_lastY;
     qint32 m_offsetX, m_offsetY;
+    quint32 offset;
     static const quint32 CACHESIZE; // Define the number of tiles we keep in cache
 
+    Vc::int32_v m_offsetScale;
 };
 
 #endif

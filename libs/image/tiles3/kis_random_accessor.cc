@@ -26,7 +26,6 @@ const quint32 KisRandomAccessor2::CACHESIZE = 4; // Define the number of tiles w
 
 KisRandomAccessor2::KisRandomAccessor2(KisTiledDataManager *ktm, qint32 x, qint32 y, qint32 offsetX, qint32 offsetY, bool writable) :
         m_ktm(ktm),
-        m_tilesCache(new KisTileInfo*[CACHESIZE]),
         m_tilesCacheSize(0),
         m_pixelSize(m_ktm->pixelSize()),
         m_writable(writable),
@@ -34,17 +33,28 @@ KisRandomAccessor2::KisRandomAccessor2(KisTiledDataManager *ktm, qint32 x, qint3
         m_offsetY(offsetY)
 {
     Q_ASSERT(ktm != 0);
+
+    m_offsetScale[0] = m_pixelSize;
+    m_offsetScale[1] = m_pixelSize*KisTileData::WIDTH;
+    m_offsetScale[2] = m_offsetScale[3] = 0;
+
+    m_lastX = x;
+    m_lastY = y;
+    x -= m_offsetX;
+    y -= m_offsetY;
+
+    KisTileInfo firstTile;
+    fetchTileData(xToCol(x), yToRow(y), firstTile);
+    m_tilesCache.push_front(firstTile);
     moveTo(x, y);
 }
 
 KisRandomAccessor2::~KisRandomAccessor2()
 {
-    for (uint i = 0; i < m_tilesCacheSize; i++) {
-        unlockTile(m_tilesCache[i]->tile);
-        unlockTile(m_tilesCache[i]->oldtile);
-        delete m_tilesCache[i];
+    for (auto& tile : m_tilesCache) {
+        unlockTile(tile.tile.data());
+        unlockTile(tile.oldtile.data());
     }
-    delete [] m_tilesCache;
 }
 
 void KisRandomAccessor2::moveTo(qint32 x, qint32 y)
@@ -54,80 +64,90 @@ void KisRandomAccessor2::moveTo(qint32 x, qint32 y)
 
     x -= m_offsetX;
     y -= m_offsetY;
+    Vc::int32_v pos;
+    pos[0] = x; pos[2] = -x;
+    pos[1] = y; pos[3] = -y;
 
-    // Look in the cache if the tile if the data is available
-    for (uint i = 0; i < m_tilesCacheSize; i++) {
-        if (x >= m_tilesCache[i]->area_x1 && x <= m_tilesCache[i]->area_x2 &&
-                y >= m_tilesCache[i]->area_y1 && y <= m_tilesCache[i]->area_y2) {
-            KisTileInfo* kti = m_tilesCache[i];
-            quint32 offset = x - kti->area_x1 + (y - kti->area_y1) * KisTileData::WIDTH;
-            offset *= m_pixelSize;
-            m_data = kti->data + offset;
-            m_oldData = kti->oldData + offset;
-            if (i > 0) {
-                memmove(m_tilesCache + 1, m_tilesCache, i * sizeof(KisTileInfo*));
-                m_tilesCache[0] = kti;
-            }
+    //shortcircuit case if we are still the current tile
+    {
+        //pos:  x, y, -x, -y
+        //area: x1, y1, -x2, -y2
+
+        KisTileInfo& m_currentTile = m_tilesCache.front();
+
+        //d: x-x1, y-y1, x2-x, y2-y
+        Vc::int32_v d = pos - m_currentTile.area;
+        if( Vc::all_of(d>=0) ) {
+            Vc::int32_v offs = d*m_offsetScale;
+
+            offset = offs[0]+offs[1];
             return;
         }
     }
+
+    // Look in the cache if the tile if the data is available
+//    for (uint i = 0; i < m_tilesCacheSize; i++) {
+
+//        qint32 dx1 = x - m_tilesCache[i]->area_x1;
+//        qint32 dx2 = m_tilesCache[i]->area_x2 - x;
+//        qint32 dy1 = y - m_tilesCache[i]->area_y1;
+//        qint32 dy2 = m_tilesCache[i]->area_y2 - y;
+
+//        if (((dx1>=0) & (dx2>=0)) && ((dy1>=0) & (dy2>=0))) {
+//            m_currentTile = m_tilesCache[i];
+//            offset = (dx1 + dy1 * KisTileData::WIDTH)*m_pixelSize;
+
+//            if (i > 0) {
+//                memmove(m_tilesCache + 1, m_tilesCache, i * sizeof(KisTileInfo*));
+//                m_tilesCache[0] = m_currentTile;
+//            }
+//            return;
+//        }
+//    }
+
     // The tile wasn't in cache
     if (m_tilesCacheSize == KisRandomAccessor2::CACHESIZE) { // Remove last element of cache
-        unlockTile(m_tilesCache[CACHESIZE-1]->tile);
-        unlockTile(m_tilesCache[CACHESIZE-1]->oldtile);
-        delete m_tilesCache[CACHESIZE-1];
+        unlockTile(m_tilesCache.back().tile.data());
+        unlockTile(m_tilesCache.back().oldtile.data());
+        m_tilesCache.splice(m_tilesCache.begin(), m_tilesCache, std::prev(m_tilesCache.end()));
     } else {
+        KisTileInfo newTile;
+        m_tilesCache.push_front(newTile);
         m_tilesCacheSize++;
     }
+
+    //memmove(m_tilesCache + 1, m_tilesCache, (KisRandomAccessor2::CACHESIZE - 1) * sizeof(KisTileInfo*));
+
     quint32 col = xToCol(x);
     quint32 row = yToRow(y);
-    KisTileInfo* kti = fetchTileData(col, row);
-    quint32 offset = x - kti->area_x1 + (y - kti->area_y1) * KisTileData::WIDTH;
-    offset *= m_pixelSize;
-    m_data = kti->data + offset;
-    m_oldData = kti->oldData + offset;
-    memmove(m_tilesCache + 1, m_tilesCache, (KisRandomAccessor2::CACHESIZE - 1) * sizeof(KisTileInfo*));
-    m_tilesCache[0] = kti;
+    fetchTileData(col, row, m_tilesCache.front());
+    offset = (x - m_tilesCache.front().area[0] + (y - m_tilesCache.front().area[1]) * KisTileData::WIDTH)*m_pixelSize;
 }
-
-
-quint8* KisRandomAccessor2::rawData()
-{
-    return m_data;
-}
-
 
 const quint8* KisRandomAccessor2::oldRawData() const
 {
 #ifdef DEBUG
     if (!m_ktm->hasCurrentMemento()) warnTiles << "Accessing oldRawData() when no transaction is in progress.";
 #endif
-    return m_oldData;
+    return m_tilesCache.front().oldData + offset;
 }
 
-const quint8* KisRandomAccessor2::rawDataConst() const
+void KisRandomAccessor2::fetchTileData(qint32 col, qint32 row, KisRandomAccessor2::KisTileInfo& kti)
 {
-    return m_data;
-}
+    kti.tile = m_ktm->getTile(col, row, m_writable);
+    lockTile(kti.tile.data());
 
-KisRandomAccessor2::KisTileInfo* KisRandomAccessor2::fetchTileData(qint32 col, qint32 row)
-{
-    KisTileInfo* kti = new KisTileInfo;
-    kti->tile = m_ktm->getTile(col, row, m_writable);
-    lockTile(kti->tile);
+    kti.data = kti.tile->data();
 
-    kti->data = kti->tile->data();
-
-    kti->area_x1 = col * KisTileData::HEIGHT;
-    kti->area_y1 = row * KisTileData::WIDTH;
-    kti->area_x2 = kti->area_x1 + KisTileData::HEIGHT - 1;
-    kti->area_y2 = kti->area_y1 + KisTileData::WIDTH - 1;
+    kti.area[0] = col * KisTileData::HEIGHT;
+    kti.area[1] = row * KisTileData::WIDTH;
+    kti.area[2] = -(kti.area[0] + KisTileData::HEIGHT - 1);
+    kti.area[3] = -(kti.area[1] + KisTileData::WIDTH - 1);
 
     // set old data
-    kti->oldtile = m_ktm->getOldTile(col, row);
-    lockOldTile(kti->oldtile);
-    kti->oldData = kti->oldtile->data();
-    return kti;
+    kti.oldtile = m_ktm->getOldTile(col, row);
+    lockOldTile(kti.oldtile.data());
+    kti.oldData = kti.oldtile->data();
 }
 
 qint32 KisRandomAccessor2::numContiguousColumns(qint32 x) const
